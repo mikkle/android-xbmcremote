@@ -24,6 +24,7 @@ package org.xbmc.android.remote.presentation.activity;
 import org.xbmc.android.remote.R;
 import org.xbmc.android.remote.presentation.controller.RemoteController;
 import org.xbmc.android.widget.gestureremote.GestureRemoteView;
+import org.xbmc.api.type.ThumbSize;
 import org.xbmc.eventclient.ButtonCodes;
 
 import android.app.Activity;
@@ -61,6 +62,9 @@ public class GestureRemoteActivity extends Activity {
 		super.onCreate(savedInstanceState);
 		
 		Display d = getWindowManager().getDefaultDisplay();
+		// set display size
+		ThumbSize.setScreenSize(d.getWidth(), d.getHeight());
+		
 		final int w = d.getWidth();
 		final int h = d.getHeight();
 		final double ar = w > h ? (double) w / (double) h : (double) h / (double) w;
@@ -87,11 +91,13 @@ public class GestureRemoteActivity extends Activity {
 
 	@Override
 	public Dialog onCreateDialog(int id) {
-		return mRemoteController.onCreateDialog(id);
+		super.onCreateDialog(id);
+		return mRemoteController.onCreateDialog(id, this);
 	}
 
 	@Override
 	public void onPrepareDialog(int id, Dialog dialog) {
+		super.onPrepareDialog(id, dialog);
 		mRemoteController.onPrepareDialog(id, dialog);
 	}
 

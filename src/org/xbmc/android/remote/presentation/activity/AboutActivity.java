@@ -21,11 +21,10 @@
 
 package org.xbmc.android.remote.presentation.activity;
 
-import java.io.IOException;
-
 import org.xbmc.android.remote.R;
 import org.xbmc.android.remote.business.ManagerFactory;
 import org.xbmc.api.business.IEventClientManager;
+import org.xbmc.api.type.ThumbSize;
 import org.xbmc.eventclient.ButtonCodes;
 
 import android.app.Activity;
@@ -33,6 +32,7 @@ import android.content.pm.PackageManager.NameNotFoundException;
 import android.os.Bundle;
 import android.text.Html;
 import android.text.method.LinkMovementMethod;
+import android.view.Display;
 import android.view.KeyEvent;
 import android.widget.TextView;
 
@@ -45,6 +45,10 @@ public class AboutActivity extends Activity {
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.about);
+		// set display size
+		final Display display = getWindowManager().getDefaultDisplay(); 
+		ThumbSize.setScreenSize(display.getWidth(), display.getHeight());
+		
 		try {
 			mEventClientManager = ManagerFactory.getEventClientManager(null);
 			final String versionName = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
@@ -75,17 +79,13 @@ public class AboutActivity extends Activity {
 	
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
-		try {
-			switch (keyCode) {
-				case KeyEvent.KEYCODE_VOLUME_UP:
-					mEventClientManager.sendButton("R1", ButtonCodes.REMOTE_VOLUME_PLUS, false, true, true, (short)0, (byte)0);
-					return true;
-				case KeyEvent.KEYCODE_VOLUME_DOWN:
-					mEventClientManager.sendButton("R1", ButtonCodes.REMOTE_VOLUME_MINUS, false, true, true, (short)0, (byte)0);
-					return true;
-			}
-		} catch (IOException e) {
-			return false;
+		switch (keyCode) {
+			case KeyEvent.KEYCODE_VOLUME_UP:
+				mEventClientManager.sendButton("R1", ButtonCodes.REMOTE_VOLUME_PLUS, false, true, true, (short)0, (byte)0);
+				return true;
+			case KeyEvent.KEYCODE_VOLUME_DOWN:
+				mEventClientManager.sendButton("R1", ButtonCodes.REMOTE_VOLUME_MINUS, false, true, true, (short)0, (byte)0);
+				return true;
 		}
 		return super.onKeyDown(keyCode, event);
 	}

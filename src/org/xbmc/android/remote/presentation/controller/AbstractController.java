@@ -21,6 +21,7 @@
 
 package org.xbmc.android.remote.presentation.controller;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
@@ -29,11 +30,11 @@ import org.apache.http.HttpException;
 import org.xbmc.android.remote.business.Command;
 import org.xbmc.android.remote.presentation.activity.HostSettingsActivity;
 import org.xbmc.android.remote.presentation.activity.SettingsActivity;
-import org.xbmc.android.util.ClientFactory;
 import org.xbmc.android.util.HostFactory;
 import org.xbmc.android.util.WifiHelper;
 import org.xbmc.api.business.INotifiableManager;
 import org.xbmc.api.object.Host;
+import org.xbmc.api.presentation.INotifiableController;
 import org.xbmc.httpapi.NoNetworkException;
 import org.xbmc.httpapi.NoSettingsException;
 import org.xbmc.httpapi.WrongDataFormatException;
@@ -41,10 +42,11 @@ import org.xbmc.httpapi.WrongDataFormatException;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.DialogInterface;
-import android.content.Intent;
 import android.content.DialogInterface.OnClickListener;
 import android.content.DialogInterface.OnDismissListener;
+import android.content.Intent;
 import android.net.wifi.WifiManager;
 import android.os.Handler;
 import android.util.Log;
@@ -55,7 +57,7 @@ import android.widget.Toast;
  * 
  * @author Team XBMC
  */
-public abstract class AbstractController {
+public abstract class AbstractController implements INotifiableController {
 	
 	public static final int MAX_WAIT_FOR_WIFI = 20;
 	public static final String TAG = "AbstractController";
@@ -72,7 +74,7 @@ public abstract class AbstractController {
 		mActivity = activity;
 		mHandler = handler;
 		HostFactory.readHost(activity.getApplicationContext());
-		ClientFactory.resetClient(HostFactory.host);
+		//ClientFactory.resetClient(HostFactory.host);
 	}
 	
 	public void onWrongConnectionState(int state, final INotifiableManager manager, final Command<?> source) {
@@ -233,8 +235,17 @@ public abstract class AbstractController {
 					mDialogShowing = false;
 				}
 			});
+		} catch (FileNotFoundException e) {
+			builder.setTitle("HTTPAPI not found.");
+			builder.setMessage("With XBMC 12 (Frodo), the API this remote is using, was removed. If you've updated to Frodo recently, please enable the new JSON-RPC API in your host settings.");
+			builder.setNeutralButton("Enable JSON-RPC", new OnClickListener() {
+				public void onClick(DialogInterface dialog, int which) {
+					mActivity.startActivity(new Intent(mActivity, HostSettingsActivity.class));
+					mDialogShowing = false;
+				}
+			});
 		} catch (IOException e) {
-			if (e.getMessage().startsWith("Network unreachable")) {
+			if (e.getMessage() != null && e.getMessage().startsWith("Network unreachable")) {
 				builder.setTitle("No network");
 				builder.setMessage("XBMC Remote needs local network access. Please make sure that your wireless network is activated. You can click on the Settings button below to directly access your network settings.");
 				builder.setNeutralButton("Settings", new OnClickListener() {
@@ -245,8 +256,10 @@ public abstract class AbstractController {
 				});
 			} else {
 				builder.setTitle("I/O Exception (" + e.getClass().getCanonicalName() + ")");
-				builder.setMessage(e.getMessage().toString());
-				Log.e(TAG, e.getStackTrace().toString());
+				if (e.getMessage() != null) {
+					builder.setMessage(e.getMessage().toString());
+				}
+				Log.e(TAG, e.getMessage(), e);
 			}
 		} catch (HttpException e) {
 			if (e.getMessage().startsWith("401")) {
@@ -299,6 +312,10 @@ public abstract class AbstractController {
 		mActivity.showDialog(id);
 	}
 
+	protected void dismissDialog(int id){
+		mActivity.dismissDialog(id);
+	}
+
 	public void onMessage(final String message) {
 		mActivity.runOnUiThread(new Runnable() {
 			public void run() {
@@ -310,9 +327,11 @@ public abstract class AbstractController {
 
 	public void runOnUI(Runnable action) {
 		if (mHandler != null) {
-			//Log.i(TAG, "### running on UI at " + mActivity.getClass().getSimpleName());
+			Log.i(TAG, "### running on UI at " + mActivity.getClass().getSimpleName());
 			mHandler.post(action);
 			//mActivity.runOnUiThread(action);
+		} else {
+			Log.e(TAG, "### no UI to run on " + mActivity.getClass().getSimpleName());
 		}
 	}
 	
@@ -325,4 +344,9 @@ public abstract class AbstractController {
 		mActivity = activity;
 		mPaused = false;
 	}
+	
+	public Context getApplicationContext() {
+		return mActivity.getApplicationContext();
+	}
+	
 }

@@ -21,7 +21,6 @@
 
 package org.xbmc.android.remote.presentation.controller;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -42,25 +41,27 @@ import org.xbmc.api.object.Song;
 import org.xbmc.eventclient.ButtonCodes;
 import org.xbmc.httpapi.client.MusicClient;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Message;
 import android.os.Handler.Callback;
+import android.os.Message;
 import android.util.Log;
 import android.view.ContextMenu;
+import android.view.ContextMenu.ContextMenuInfo;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewGroup;
-import android.view.ContextMenu.ContextMenuInfo;
 import android.view.View.OnClickListener;
+import android.view.ViewGroup;
 import android.widget.AbsListView;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.AdapterView.OnItemClickListener;
+import android.widget.ArrayAdapter;
+import android.widget.ListView;
 
 public class MusicPlaylistController extends ListController implements IController, Callback {
 	
@@ -88,6 +89,7 @@ public class MusicPlaylistController extends ListController implements IControll
 	private static Bitmap sPlayingBitmap;
 	
 	public void onCreate(final PlaylistActivity activity, Handler handler, final AbsListView list) {
+		Log.e("MusicPlaylistClient", "On Create.");
 		
 		mPlaylistActivity = activity;
 		mMusicManager = ManagerFactory.getMusicManager(this);
@@ -110,7 +112,8 @@ public class MusicPlaylistController extends ListController implements IControll
 			}, mActivity.getApplicationContext());
 			
 			mMusicManager.getPlaylist(new DataResponse<ArrayList<String>>() {
-	  	  		public void run() {
+	  	  		@SuppressLint("")
+				public void run() {
 	  	  			if (value.size() > 0) {
 		  	  			final ArrayList<PlaylistItem> items = new ArrayList<PlaylistItem>();
 		  	  			int i = 0;
@@ -119,7 +122,7 @@ public class MusicPlaylistController extends ListController implements IControll
 						}
 						setTitle("Music playlist (" + (value.size() > MusicClient.PLAYLIST_LIMIT ? MusicClient.PLAYLIST_LIMIT + "+" : value.size()) + ")" );
 						mSongAdapter = new SongAdapter(activity, items);
-						mList.setAdapter(mSongAdapter);
+						((ListView)mList).setAdapter(mSongAdapter);
 						if (mCurrentPosition >= 0) {
 							mList.setSelection(mCurrentPosition);
 						}
@@ -151,6 +154,7 @@ public class MusicPlaylistController extends ListController implements IControll
 	 *            Message object containing currently playing info
 	 */
 	public synchronized boolean handleMessage(Message msg) {
+		Log.e("MusicPlaylistClient", "Handling a message.");
 		final Bundle data = msg.getData();
 		final ICurrentlyPlaying currentlyPlaying = (ICurrentlyPlaying) data.getSerializable(NowPlayingPollerThread.BUNDLE_CURRENTLY_PLAYING);
 		switch (msg.what) {
@@ -195,21 +199,19 @@ public class MusicPlaylistController extends ListController implements IControll
 		next.setOnClickListener(new OnRemoteAction(ButtonCodes.REMOTE_SKIP_PLUS));
 		playpause.setOnClickListener(new OnClickListener() {
 			public void onClick(View v) {
-				try {
-					switch (mPlayStatus) {
-						case PlayStatus.PLAYING:
-							mEventClient.sendButton("R1", ButtonCodes.REMOTE_PAUSE, false, true, true, (short)0, (byte)0);
-							break;
-						case PlayStatus.PAUSED:
-							mEventClient.sendButton("R1", ButtonCodes.REMOTE_PLAY, false, true, true, (short)0, (byte)0);
-							break;
-						case PlayStatus.STOPPED:
-							final DataResponse<Boolean> doNothing = new DataResponse<Boolean>();
-							mControlManager.setPlaylistId(doNothing, mPlayListId < 0 ? 0 : mPlayListId, mActivity.getApplicationContext());
-							mControlManager.setPlaylistPos(doNothing, mLastPosition < 0 ? 0 : mLastPosition, mActivity.getApplicationContext());
-							break;
-					}
-				} catch (IOException e) { }
+				switch (mPlayStatus) {
+					case PlayStatus.PLAYING:
+						mEventClient.sendButton("R1", ButtonCodes.REMOTE_PAUSE, false, true, true, (short)0, (byte)0);
+						break;
+					case PlayStatus.PAUSED:
+						mEventClient.sendButton("R1", ButtonCodes.REMOTE_PLAY, false, true, true, (short)0, (byte)0);
+						break;
+					case PlayStatus.STOPPED:
+						final DataResponse<Boolean> doNothing = new DataResponse<Boolean>();
+						mControlManager.setPlaylistId(doNothing, mPlayListId < 0 ? 0 : mPlayListId, mActivity.getApplicationContext());
+						mControlManager.setPlaylistPos(doNothing, mLastPosition < 0 ? 0 : mLastPosition, mActivity.getApplicationContext());
+						break;
+				}
 			}
 		});
 	}
@@ -227,10 +229,7 @@ public class MusicPlaylistController extends ListController implements IControll
 		}
 
 		public void onClick(View v) {
-			try {
-				mEventClient.sendButton("R1", mAction, false, true, true, (short) 0, (byte) 0);
-			} catch (IOException e) {
-			}
+			mEventClient.sendButton("R1", mAction, false, true, true, (short) 0, (byte) 0);
 		}
 	}
 	
@@ -263,10 +262,12 @@ public class MusicPlaylistController extends ListController implements IControll
 	@Override
 	public void onCreateContextMenu(ContextMenu menu, View v, ContextMenuInfo menuInfo) {
 		// be aware that this must be explicitly called by your activity!
-/*		final OneHolder<PlaylistItem>holder = (OneHolder<PlaylistItem>)((AdapterContextMenuInfo)menuInfo).targetView.getTag();
+		/*
+		final OneHolder<PlaylistItem>holder = (OneHolder<PlaylistItem>)((AdapterContextMenuInfo)menuInfo).targetView.getTag();
 		menu.setHeaderTitle(holder.holderItem.filename);
 		menu.add(0, ITEM_CONTEXT_PLAY, 1, "Play");
-		menu.add(0, ITEM_CONTEXT_REMOVE, 2, "Remove");*/
+		menu.add(0, ITEM_CONTEXT_REMOVE, 2, "Remove");
+		*/
 	}
 	
 	public void onContextItemSelected(MenuItem item) {
@@ -277,7 +278,7 @@ public class MusicPlaylistController extends ListController implements IControll
 				mMusicManager.setPlaylistSong(new DataResponse<Boolean>(), playlistItem.position, mActivity.getApplicationContext());
 				break;
 			case ITEM_CONTEXT_REMOVE:
-				mMusicManager.removeFromPlaylist(new DataResponse<Boolean>(), playlistItem.path, mActivity.getApplicationContext());
+				mMusicManager.removeFromPlaylist(new DataResponse<Boolean>(), playlistItem.position, mActivity.getApplicationContext());
 				break;
 			default:
 				return;
@@ -357,15 +358,10 @@ public class MusicPlaylistController extends ListController implements IControll
 	public void onActivityResume(Activity activity) {
 		super.onActivityResume(activity);
 		ConnectionFactory.getNowPlayingPoller(activity.getApplicationContext()).subscribe(mNowPlayingHandler);
-		if (mEventClient != null) {
-			mEventClient.setController(this);
-		}
-		if (mMusicManager != null) {
-			mMusicManager.setController(this);
-		}
-		if (mControlManager != null) {
-			mControlManager.setController(this);
-		}
+		
+		mEventClient = ManagerFactory.getEventClientManager(this);
+		mMusicManager = ManagerFactory.getMusicManager(this);
+		mControlManager = ManagerFactory.getControlManager(this);
 	}
 	
 	private static final long serialVersionUID = 755529227668553163L;

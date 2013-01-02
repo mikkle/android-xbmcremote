@@ -31,6 +31,7 @@ import org.xbmc.android.remote.presentation.activity.TvShowDetailsActivity;
 import org.xbmc.android.remote.presentation.widget.FiveLabelsItemView;
 import org.xbmc.android.remote.presentation.widget.FlexibleItemView;
 import org.xbmc.android.util.ImportUtilities;
+import org.xbmc.android.util.StringUtil;
 import org.xbmc.api.business.DataResponse;
 import org.xbmc.api.business.IControlManager;
 import org.xbmc.api.business.ISortableManager;
@@ -39,6 +40,7 @@ import org.xbmc.api.object.Actor;
 import org.xbmc.api.object.Genre;
 import org.xbmc.api.object.TvShow;
 import org.xbmc.api.type.SortType;
+import org.xbmc.api.type.ThumbSize;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -46,27 +48,33 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.os.Handler;
+import android.preference.PreferenceManager;
 import android.view.ContextMenu;
+import android.view.ContextMenu.ContextMenuInfo;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ContextMenu.ContextMenuInfo;
 import android.widget.AbsListView;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.Toast;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.AdapterView.OnItemClickListener;
+import android.widget.ArrayAdapter;
+import android.widget.ListView;
+import android.widget.Toast;
 
 public class TvShowListController extends ListController implements IController {
 	
+	private static final int mThumbSize = ThumbSize.SMALL;
 	public static final int ITEM_CONTEXT_BROWSE = 1;
 	public static final int ITEM_CONTEXT_INFO = 2;
+	public static final int ITEM_CONTEXT_IMDB = 3;
 	
 	public static final int MENU_PLAY_ALL = 1;
 	public static final int MENU_SORT = 2;
@@ -127,54 +135,32 @@ public class TvShowListController extends ListController implements IController 
 	}
 	
 	private void fetch() {
-		final Actor actor = mActor;
-		final Genre genre = mGenre;
-		
 		// tv show and episode both are using the same manager so set the sort key here
 		((ISortableManager)mTvManager).setSortKey(AbstractManager.PREF_SORT_KEY_SHOW);
+		((ISortableManager)mTvManager).setIgnoreArticle(PreferenceManager.getDefaultSharedPreferences(mActivity.getApplicationContext()).getBoolean(ISortableManager.SETTING_IGNORE_ARTICLE, true));
 		((ISortableManager)mTvManager).setPreferences(mActivity.getPreferences(Context.MODE_PRIVATE));
+
+		final String title = mActor != null ? mActor.name + " - " : mGenre != null ? mGenre.name + " - " : "" + "TV Shows";
+		DataResponse<ArrayList<TvShow>> response = new DataResponse<ArrayList<TvShow>>() {
+			public void run() {
+				if (value.size() > 0) {
+					setTitle(title + " (" + value.size() + ")");
+					((ListView)mList).setAdapter(new TvShowAdapter(mActivity, value));
+				} else {
+					setTitle(title);
+					setNoDataMessage("No TV shows found.", R.drawable.icon_movie_dark);
+				}
+			}
+		};
 		
 		showOnLoading();
-		if (actor != null) {						// TV Shows with a certain actor
-			setTitle(actor.name + " - TV Shows...");
-			mTvManager.getTvShows(new DataResponse<ArrayList<TvShow>>() {
-				public void run() {
-					if (value.size() > 0) {
-						setTitle(actor.name + " - TV Shows (" + value.size() + ")");
-						mList.setAdapter(new TvShowAdapter(mActivity, value));
-					} else {
-						setTitle(actor.name + " - TV Shows");
-						setNoDataMessage("No TV shows found.", R.drawable.icon_movie_dark);
-					}
-				}
-			}, actor, mActivity.getApplicationContext());
-			
-		} else if (genre != null) {					// TV Shows of a genre
-			setTitle(genre.name + " - TV Shows...");
-			mTvManager.getTvShows(new DataResponse<ArrayList<TvShow>>() {
-				public void run() {
-					if (value.size() > 0) {
-						setTitle(genre.name + " - TV Shows (" + value.size() + ")");
-						mList.setAdapter(new TvShowAdapter(mActivity, value));
-					} else {
-						setTitle(genre.name + " - TV Shows");
-						setNoDataMessage("No tv shows found.", R.drawable.icon_movie_dark);
-					}
-				}
-			}, genre, mActivity.getApplicationContext());
-		} else {
-			setTitle("TV Shows...");				// all TV Shows
-			mTvManager.getTvShows(new DataResponse<ArrayList<TvShow>>() {
-				public void run() {
-					if (value.size() > 0) {
-						setTitle("TV Shows (" + value.size() + ")");
-						mList.setAdapter(new TvShowAdapter(mActivity, value));
-					} else {
-						setTitle("TV Shows");
-						setNoDataMessage("No TV Shows found.", R.drawable.icon_movie_dark);
-					}
-				}
-			}, mActivity.getApplicationContext());
+		setTitle(title + "...");		
+		if (mActor != null) {						// TV Shows with a certain actor
+			mTvManager.getTvShows(response, mActor, mActivity.getApplicationContext());
+		} else if (mGenre != null) {					// TV Shows of a genre
+			mTvManager.getTvShows(response, mGenre, mActivity.getApplicationContext());
+		} else {									// all TV Shows
+			mTvManager.getTvShows(response, mActivity.getApplicationContext());
 		}
 	}
 	
@@ -216,6 +202,7 @@ public class TvShowListController extends ListController implements IController 
 		menu.setHeaderTitle(view.title);
 		menu.add(0, ITEM_CONTEXT_BROWSE, 1, "Browse TV Show");
 		menu.add(0, ITEM_CONTEXT_INFO, 2, "View Details");
+		menu.add(0, ITEM_CONTEXT_IMDB, 3, "Open IMDb");
 	}
 	
 	public void onContextItemSelected(MenuItem item) {
@@ -231,6 +218,14 @@ public class TvShowListController extends ListController implements IController 
 				Intent nextActivity = new Intent(mActivity, TvShowDetailsActivity.class);
 				nextActivity.putExtra(ListController.EXTRA_TVSHOW, show);
 				mActivity.startActivity(nextActivity);
+				break;
+			case ITEM_CONTEXT_IMDB:
+				Intent intentIMDb = new Intent(Intent.ACTION_VIEW, Uri.parse("imdb:///find?s=tt&q=" + show.getName()));
+				if (mActivity.getPackageManager().resolveActivity(intentIMDb, PackageManager.MATCH_DEFAULT_ONLY) == null)
+				{
+					intentIMDb = new Intent(Intent.ACTION_VIEW, Uri.parse("http://www.imdb.com/search/title?title=" + show.getShortName() + "&title_type=tv_series&release_date=" + show.firstAired));
+				}
+				mActivity.startActivity(intentIMDb);
 				break;
 			default:
 				return;
@@ -316,27 +311,34 @@ public class TvShowListController extends ListController implements IController 
 		TvShowAdapter(Activity activity, ArrayList<TvShow> items) {
 			super(activity, 0, items);
 		}
+
 		public View getView(int position, View convertView, ViewGroup parent) {
 
 			final FlexibleItemView view;
 			if (convertView == null) {
-				view = new FlexibleItemView(mActivity, mTvManager, parent.getWidth(), mFallbackBitmap, mList.getSelector(), false);
+				view = new FlexibleItemView(mActivity, mTvManager, parent.getWidth(), mFallbackBitmap,
+						mList.getSelector(), false);
 			} else {
-				view = (FlexibleItemView)convertView;
+				view = (FlexibleItemView) convertView;
 			}
-			
+
 			final TvShow show = getItem(position);
 			view.reset();
 			view.position = position;
 			view.posterOverlay = show.watched ? mWatchedBitmap : null;
 			view.title = show.title;
-			view.subtitle = show.genre;
-			view.subtitleRight = show.firstAired!=null?show.firstAired:"";
+			view.subtitle = StringUtil.join(",", show.genre);
+			view.subtitleRight = show.firstAired != null ? show.firstAired : "";
 			view.bottomtitle = show.numEpisodes + " episodes";
-			view.bottomright = String.valueOf(((float)Math.round(show.rating *10))/ 10);
-			
+			view.bottomright = String.valueOf(((float) Math.round(show.rating * 10)) / 10);
+
 			if (mLoadCovers) {
-				view.getResponse().load(show, !mPostScrollLoader.isListIdle());
+				if (mTvManager.coverLoaded(show, mThumbSize)) {
+					view.setCover(mTvManager.getCoverSync(show, mThumbSize));
+				} else {
+					view.setCover(null);
+					view.getResponse().load(show, !mPostScrollLoader.isListIdle());
+				}
 			}
 			return view;
 		}
@@ -357,12 +359,8 @@ public class TvShowListController extends ListController implements IController 
 
 	public void onActivityResume(Activity activity) {
 		super.onActivityResume(activity);
-		if (mTvManager != null) {
-			mTvManager.setController(this);
-		}
-		if (mControlManager != null) {
-			mControlManager.setController(this);
-		}
+		mTvManager = ManagerFactory.getTvManager(this);
+		mControlManager = ManagerFactory.getControlManager(this);
 	}
 
 }

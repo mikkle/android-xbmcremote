@@ -21,16 +21,17 @@
 
 package org.xbmc.android.remote.presentation.activity;
 
-import java.io.IOException;
-
 import org.xbmc.android.remote.business.ManagerFactory;
 import org.xbmc.android.remote.presentation.controller.SettingsController;
 import org.xbmc.api.business.IEventClientManager;
+import org.xbmc.api.type.ThumbSize;
 import org.xbmc.eventclient.ButtonCodes;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.preference.PreferenceActivity;
+import android.view.Display;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -49,6 +50,10 @@ public class HostSettingsActivity extends PreferenceActivity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		// set display size
+		final Display display = getWindowManager().getDefaultDisplay(); 
+		ThumbSize.setScreenSize(display.getWidth(), display.getHeight());
+		
 		setTitle("XBMC Hosts");
 		mSettingsController = new SettingsController(this, new Handler());
 		mConfigurationManager = ConfigurationManager.getInstance(this);
@@ -67,6 +72,12 @@ public class HostSettingsActivity extends PreferenceActivity {
 		return super.onMenuItemSelected(featureId, item);
 	}
 	
+	@Override
+	protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+		mSettingsController.onActivityResult(requestCode, resultCode, data);
+		super.onActivityResult(requestCode, resultCode, data);
+	}
+
 	@Override
 	protected void onResume() {
 		super.onResume();
@@ -88,20 +99,14 @@ public class HostSettingsActivity extends PreferenceActivity {
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
 		IEventClientManager client = ManagerFactory.getEventClientManager(mSettingsController);
-		try {
-			switch (keyCode) {
-				case KeyEvent.KEYCODE_VOLUME_UP:
-					client.sendButton("R1", ButtonCodes.REMOTE_VOLUME_PLUS, false, true, true, (short)0, (byte)0);
-					return true;
-				case KeyEvent.KEYCODE_VOLUME_DOWN:
-					client.sendButton("R1", ButtonCodes.REMOTE_VOLUME_MINUS, false, true, true, (short)0, (byte)0);
-					return true;
-			}
-		} catch (IOException e) {
-			client.setController(null);
-			return false;
+		switch (keyCode) {
+			case KeyEvent.KEYCODE_VOLUME_UP:
+				client.sendButton("R1", ButtonCodes.REMOTE_VOLUME_PLUS, false, true, true, (short)0, (byte)0);
+				return true;
+			case KeyEvent.KEYCODE_VOLUME_DOWN:
+				client.sendButton("R1", ButtonCodes.REMOTE_VOLUME_MINUS, false, true, true, (short)0, (byte)0);
+				return true;
 		}
-		client.setController(null);
 		return super.onKeyDown(keyCode, event);
 	}
 }

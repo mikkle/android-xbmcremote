@@ -23,6 +23,7 @@ package org.xbmc.android.remote.presentation.controller;
 
 import java.util.ArrayList;
 
+import org.xbmc.android.jsonrpc.api.Version.Branch;
 import org.xbmc.android.remote.R;
 import org.xbmc.android.remote.business.AbstractManager;
 import org.xbmc.android.remote.business.ManagerFactory;
@@ -32,13 +33,16 @@ import org.xbmc.android.remote.presentation.widget.ThreeLabelsItemView;
 import org.xbmc.android.util.ImportUtilities;
 import org.xbmc.api.business.DataResponse;
 import org.xbmc.api.business.IControlManager;
+import org.xbmc.api.business.IInfoManager;
 import org.xbmc.api.business.IMusicManager;
 import org.xbmc.api.business.ISortableManager;
 import org.xbmc.api.object.Album;
 import org.xbmc.api.object.Artist;
 import org.xbmc.api.object.Genre;
 import org.xbmc.api.type.SortType;
+import org.xbmc.api.type.ThumbSize;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
@@ -47,27 +51,32 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.BitmapFactory;
 import android.os.Handler;
+import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.ContextMenu;
+import android.view.ContextMenu.ContextMenuInfo;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ContextMenu.ContextMenuInfo;
 import android.widget.AbsListView;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.GridView;
-import android.widget.Toast;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.AdapterView.OnItemClickListener;
+import android.widget.ArrayAdapter;
+import android.widget.GridView;
+import android.widget.ListView;
+import android.widget.Toast;
 
 /**
  * TODO Once we move to 1.6+, waste the deprecated code. 
  */
+@SuppressLint("")
 public class AlbumListController extends ListController implements IController {
 	
+	private static final int mThumbSize = ThumbSize.SMALL;
+
 	private static final String TAG = "AlbumListController";
 	
 	public static final int ITEM_CONTEXT_QUEUE = 1;
@@ -76,12 +85,21 @@ public class AlbumListController extends ListController implements IController {
 	
 	public static final int MENU_PLAY_ALL = 1;
 	public static final int MENU_SORT = 2;
+	
 	public static final int MENU_SORT_BY_ARTIST_ASC = 21;
 	public static final int MENU_SORT_BY_ARTIST_DESC = 22;
 	public static final int MENU_SORT_BY_ALBUM_ASC = 23;
 	public static final int MENU_SORT_BY_ALBUM_DESC = 24;
 	public static final int MENU_SORT_BY_YEAR_ASC = 25;
 	public static final int MENU_SORT_BY_YEAR_DESC = 26;
+	public static final int MENU_SORT_BY_PLAYCOUNT_ASC = 27;
+	public static final int MENU_SORT_BY_PLAYCOUNT_DESC = 28;
+	public static final int MENU_SORT_BY_DATEADDED_ASC = 29;
+	public static final int MENU_SORT_BY_DATEADDED_DESC = 30;
+	public static final int MENU_SORT_BY_LASTPLAYED_ASC = 31;
+	public static final int MENU_SORT_BY_LASTPLAYED_DESC = 32;
+	
+	
 	public static final int MENU_SWITCH_VIEW = 3;
 	
 	private static final int VIEW_LIST = 1;
@@ -94,6 +112,7 @@ public class AlbumListController extends ListController implements IController {
 	
 	private IMusicManager mMusicManager;
 	private IControlManager mControlManager;
+	private IInfoManager mInfoManager;
 	
 	private boolean mCompilationsOnly = false;
 	private boolean mLoadCovers = false;
@@ -121,8 +140,10 @@ public class AlbumListController extends ListController implements IController {
 		
 		mMusicManager = ManagerFactory.getMusicManager(this);
 		mControlManager = ManagerFactory.getControlManager(this);
+		mInfoManager = ManagerFactory.getInfoManager(this);
 		
 		((ISortableManager)mMusicManager).setSortKey(AbstractManager.PREF_SORT_KEY_ALBUM);
+		((ISortableManager)mMusicManager).setIgnoreArticle(PreferenceManager.getDefaultSharedPreferences(activity.getApplicationContext()).getBoolean(ISortableManager.SETTING_IGNORE_ARTICLE, true));
 		((ISortableManager)mMusicManager).setPreferences(activity.getPreferences(Context.MODE_PRIVATE));
 		
 		final String sdError = ImportUtilities.assertSdCard();
@@ -162,7 +183,7 @@ public class AlbumListController extends ListController implements IController {
 	private void setAdapter(ArrayList<Album> value) {
 		switch (mCurrentView) {
 			case VIEW_LIST:
-				mList.setAdapter(new AlbumAdapter(mActivity, value));
+				((ListView)mList).setAdapter(new AlbumAdapter(mActivity, value));
 				mList.setVisibility(View.VISIBLE);
 				if (mGrid != null) {
 					mGrid.setVisibility(View.GONE);
@@ -170,12 +191,12 @@ public class AlbumListController extends ListController implements IController {
 				break;
 			case VIEW_GRID:
 				if (mGrid != null) {
-					mGrid.setAdapter(new AlbumGridAdapter(mActivity, value));
+					((GridView)mGrid).setAdapter(new AlbumGridAdapter(mActivity, value));
 					mGrid.setVisibility(View.VISIBLE);
 					mList.setVisibility(View.GONE);
 				} else {
 					mList.setVisibility(View.VISIBLE);
-					mList.setAdapter(new AlbumAdapter(mActivity, value));
+					((ListView)mList).setAdapter(new AlbumAdapter(mActivity, value));
 				}
 			break;
 		}
@@ -211,68 +232,29 @@ public class AlbumListController extends ListController implements IController {
 	}
 	
 	private void fetch() {
-		final Artist artist = mArtist;
-		final Genre genre = mGenre;
-		if (artist != null) {						// albums of an artist
-			setTitle(artist.name + " - Albums...");
-			showOnLoading();
-			mMusicManager.getAlbums(new DataResponse<ArrayList<Album>>() {
-				public void run() {
-					if (value.size() > 0) {
-						setTitle(artist.name + " - Albums (" + value.size() + ")");
-						setAdapter(value);
-					} else {
-						setTitle(artist.name + " - Albums");
-						setNoDataMessage("No albums found.", R.drawable.default_album);
-					}
+		final String title = mArtist != null ? mArtist.name + " - " : mGenre != null ? mGenre.name + " - " : "" + (mCompilationsOnly ? "Compilations" : "Albums");
+		DataResponse<ArrayList<Album>> response = new DataResponse<ArrayList<Album>>() {
+			public void run() {
+				if (value.size() > 0) {
+					setTitle(title + " (" + value.size() + ")");
+					setAdapter(value);
+				} else {
+					setTitle(title);
+					setNoDataMessage("No albums found.", R.drawable.default_album);
 				}
-			}, artist, mActivity.getApplicationContext());
-			
-		} else if (genre != null) {					// albums of a genre
-			setTitle(genre.name + " - Albums...");
-			showOnLoading();
-			mMusicManager.getAlbums(new DataResponse<ArrayList<Album>>() {
-				public void run() {
-					if (value.size() > 0) {
-						setTitle(genre.name + " - Albums (" + value.size() + ")");
-						setAdapter(value);
-					} else {
-						setTitle(genre.name + " - Albums");
-						setNoDataMessage("No albums found.", R.drawable.default_album);
-					}
-				}
-			}, genre, mActivity.getApplicationContext());
-			
-		} else {
-			if (mCompilationsOnly) {				// compilations
-				setTitle("Compilations...");
-				showOnLoading();
-				mMusicManager.getCompilations(new DataResponse<ArrayList<Album>>() {
-					public void run() {
-						if (value.size() > 0) {
-							setTitle("Compilations (" + value.size() + ")");
-							setAdapter(value);
-						} else {
-							setTitle("Compilations");
-							setNoDataMessage("No compilations found.", R.drawable.default_album);
-						}
-					}
-				}, mActivity.getApplicationContext());
-			} else {
-				setTitle("Albums...");				// all albums
-				showOnLoading();
-				mMusicManager.getAlbums(new DataResponse<ArrayList<Album>>() {
-					public void run() {
-						if (value.size() > 0) {
-							setTitle("Albums (" + value.size() + ")");
-							setAdapter(value);
-						} else {
-							setTitle("Albums");
-							setNoDataMessage("No Albums found.", R.drawable.default_album);
-						}
-					}
-				}, mActivity.getApplicationContext());
 			}
+		};
+		
+		showOnLoading();
+		setTitle(title + "...");		
+		if (mArtist != null) {						// albums of an artist
+			mMusicManager.getAlbums(response, mArtist, mActivity.getApplicationContext());			
+		} else if (mGenre != null) {				// albums of a genre
+			mMusicManager.getAlbums(response, mGenre, mActivity.getApplicationContext());			
+		} else if (mCompilationsOnly) {				// compilations
+			mMusicManager.getCompilations(response, mActivity.getApplicationContext());
+		} else {
+			mMusicManager.getAlbums(response, mActivity.getApplicationContext());
 		}
 	}
 	
@@ -317,15 +299,24 @@ public class AlbumListController extends ListController implements IController {
 			menu.add(0, MENU_PLAY_ALL, 0, "Play all").setIcon(R.drawable.menu_album);
 		}
 		SubMenu sortMenu = menu.addSubMenu(0, MENU_SORT, 0, "Sort").setIcon(R.drawable.menu_sort);
-		sortMenu.add(2, MENU_SORT_BY_ALBUM_ASC, 0, "by Album ascending");
-		sortMenu.add(2, MENU_SORT_BY_ALBUM_DESC, 0, "by Album descending");
+		sortMenu.add(2, MENU_SORT_BY_ALBUM_ASC, 0, mActivity.getString(R.string.sort_album));
+		sortMenu.add(2, MENU_SORT_BY_ALBUM_DESC, 0, mActivity.getString(R.string.sort_album_r));
 		
 		if (mArtist != null) {
-			sortMenu.add(2, MENU_SORT_BY_YEAR_ASC, 0, "by Year ascending");
-			sortMenu.add(2, MENU_SORT_BY_YEAR_DESC, 0, "by Year descending");
+			sortMenu.add(2, MENU_SORT_BY_YEAR_DESC, 0, mActivity.getString(R.string.sort_year));
+			sortMenu.add(2, MENU_SORT_BY_YEAR_ASC, 0, mActivity.getString(R.string.sort_album_r));
 		} else {
-			sortMenu.add(2, MENU_SORT_BY_ARTIST_ASC, 0, "by Artist ascending");
-			sortMenu.add(2, MENU_SORT_BY_ARTIST_DESC, 0, "by Artist descending");
+			sortMenu.add(2, MENU_SORT_BY_ARTIST_ASC, 0, mActivity.getString(R.string.sort_artist));
+			sortMenu.add(2, MENU_SORT_BY_ARTIST_DESC, 0, mActivity.getString(R.string.sort_artist_r));
+		}
+		
+		if(mInfoManager.getAPIVersion(mActivity.getApplicationContext()) >= Branch.FRODO.ordinal()) {
+			sortMenu.add(2, MENU_SORT_BY_PLAYCOUNT_DESC, 0, mActivity.getString(R.string.sort_playcount));
+			sortMenu.add(2, MENU_SORT_BY_PLAYCOUNT_ASC, 0, mActivity.getString(R.string.sort_playcount_r));
+			sortMenu.add(2, MENU_SORT_BY_DATEADDED_DESC, 0, mActivity.getString(R.string.sort_dateadded));
+			sortMenu.add(2, MENU_SORT_BY_DATEADDED_ASC, 0, mActivity.getString(R.string.sort_dateadded_r));
+			sortMenu.add(2, MENU_SORT_BY_LASTPLAYED_DESC, 0, mActivity.getString(R.string.sort_lastplayed));
+			sortMenu.add(2, MENU_SORT_BY_LASTPLAYED_ASC, 0, mActivity.getString(R.string.sort_lastplayed_r));
 		}
 //		menu.add(0, MENU_SWITCH_VIEW, 0, "Switch view").setIcon(R.drawable.menu_view);
 	}
@@ -402,6 +393,48 @@ public class AlbumListController extends ListController implements IController {
 			ed.commit();
 			fetch();
 			break;
+		case MENU_SORT_BY_PLAYCOUNT_ASC:
+			ed = mActivity.getPreferences(Context.MODE_PRIVATE).edit();
+			ed.putInt(AbstractManager.PREF_SORT_BY_PREFIX + AbstractManager.PREF_SORT_KEY_ALBUM, SortType.PLAYCOUNT);
+			ed.putString(AbstractManager.PREF_SORT_ORDER_PREFIX + AbstractManager.PREF_SORT_KEY_ALBUM, SortType.ORDER_ASC);
+			ed.commit();
+			fetch();
+			break;
+		case MENU_SORT_BY_PLAYCOUNT_DESC:
+			ed = mActivity.getPreferences(Context.MODE_PRIVATE).edit();
+			ed.putInt(AbstractManager.PREF_SORT_BY_PREFIX + AbstractManager.PREF_SORT_KEY_ALBUM, SortType.PLAYCOUNT);
+			ed.putString(AbstractManager.PREF_SORT_ORDER_PREFIX + AbstractManager.PREF_SORT_KEY_ALBUM, SortType.ORDER_DESC);
+			ed.commit();
+			fetch();
+			break;
+		case MENU_SORT_BY_DATEADDED_ASC:
+			ed = mActivity.getPreferences(Context.MODE_PRIVATE).edit();
+			ed.putInt(AbstractManager.PREF_SORT_BY_PREFIX + AbstractManager.PREF_SORT_KEY_ALBUM, SortType.DATE_ADDED);
+			ed.putString(AbstractManager.PREF_SORT_ORDER_PREFIX + AbstractManager.PREF_SORT_KEY_ALBUM, SortType.ORDER_ASC);
+			ed.commit();
+			fetch();
+			break;
+		case MENU_SORT_BY_DATEADDED_DESC:
+			ed = mActivity.getPreferences(Context.MODE_PRIVATE).edit();
+			ed.putInt(AbstractManager.PREF_SORT_BY_PREFIX + AbstractManager.PREF_SORT_KEY_ALBUM, SortType.DATE_ADDED);
+			ed.putString(AbstractManager.PREF_SORT_ORDER_PREFIX + AbstractManager.PREF_SORT_KEY_ALBUM, SortType.ORDER_DESC);
+			ed.commit();
+			fetch();
+			break;
+		case MENU_SORT_BY_LASTPLAYED_ASC:
+			ed = mActivity.getPreferences(Context.MODE_PRIVATE).edit();
+			ed.putInt(AbstractManager.PREF_SORT_BY_PREFIX + AbstractManager.PREF_SORT_KEY_ALBUM, SortType.LASTPLAYED);
+			ed.putString(AbstractManager.PREF_SORT_ORDER_PREFIX + AbstractManager.PREF_SORT_KEY_ALBUM, SortType.ORDER_ASC);
+			ed.commit();
+			fetch();
+			break;
+		case MENU_SORT_BY_LASTPLAYED_DESC:
+			ed = mActivity.getPreferences(Context.MODE_PRIVATE).edit();
+			ed.putInt(AbstractManager.PREF_SORT_BY_PREFIX + AbstractManager.PREF_SORT_KEY_ALBUM, SortType.LASTPLAYED);
+			ed.putString(AbstractManager.PREF_SORT_ORDER_PREFIX + AbstractManager.PREF_SORT_KEY_ALBUM, SortType.ORDER_DESC);
+			ed.commit();
+			fetch();
+			break;
 		case MENU_SWITCH_VIEW:
 			mCurrentView = (mCurrentView % 2) + 1;
 			fetch();
@@ -429,7 +462,12 @@ public class AlbumListController extends ListController implements IController {
 			view.subsubtitle = album.year > 0 ? String.valueOf(album.year) : "";
 			Log.i(TAG, "isListIdle: " + mPostScrollLoader.isListIdle());
 			if (mLoadCovers) {
-				view.getResponse().load(album, !mPostScrollLoader.isListIdle());
+				if(mMusicManager.coverLoaded(album, mThumbSize)){
+					view.setCover(mMusicManager.getCoverSync(album, mThumbSize));
+				}else{
+					view.setCover(null);
+					view.getResponse().load(album, !mPostScrollLoader.isListIdle());
+				}
 			}
 			return view;
 		}
@@ -489,12 +527,8 @@ public class AlbumListController extends ListController implements IController {
 
 	public void onActivityResume(Activity activity) {
 		super.onActivityResume(activity);
-		if (mMusicManager != null) {
-			mMusicManager.setController(this);
-		}
-		if (mControlManager != null) {
-			mControlManager.setController(this);
-		}
+		mMusicManager = ManagerFactory.getMusicManager(this);
+		mControlManager = ManagerFactory.getControlManager(this);
 	}
 	
 	private static final long serialVersionUID = 1088971882661811256L;

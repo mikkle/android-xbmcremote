@@ -24,16 +24,17 @@ package org.xbmc.android.remote.presentation.activity;
 import org.xbmc.android.remote.R;
 import org.xbmc.android.remote.presentation.controller.RemoteController;
 import org.xbmc.android.util.KeyTracker;
-import org.xbmc.android.util.OnLongPressBackKeyTracker;
 import org.xbmc.android.util.KeyTracker.Stage;
+import org.xbmc.android.util.OnLongPressBackKeyTracker;
+import org.xbmc.api.type.ThumbSize;
 import org.xbmc.eventclient.ButtonCodes;
 
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
-import android.os.Bundle;
 import android.os.Build.VERSION;
+import android.os.Bundle;
 import android.util.Log;
 import android.view.Display;
 import android.view.KeyEvent;
@@ -90,6 +91,8 @@ public class RemoteActivity extends Activity {
 		super.onCreate(savedInstanceState);
 		
 		Display d = getWindowManager().getDefaultDisplay();
+		// set display size
+		ThumbSize.setScreenSize(d.getWidth(), d.getHeight());	
 		final int w = d.getWidth();
 		final int h = d.getHeight();
 		final double ar = w > h ? (double) w / (double) h : (double) h / (double) w;
@@ -129,11 +132,13 @@ public class RemoteActivity extends Activity {
 
 	@Override
 	public Dialog onCreateDialog(int id) {
-		return mRemoteController.onCreateDialog(id);
+		super.onCreateDialog(id);
+		return mRemoteController.onCreateDialog(id, this);
 	}
 
 	@Override
 	public void onPrepareDialog(int id, Dialog dialog) {
+		super.onPrepareDialog(id, dialog);
 		mRemoteController.onPrepareDialog(id, dialog);
 	}
 

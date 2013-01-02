@@ -31,20 +31,22 @@ import org.xbmc.api.business.DataResponse;
 import org.xbmc.api.business.IMusicManager;
 import org.xbmc.api.object.Genre;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.BitmapFactory;
 import android.os.Handler;
 import android.view.ContextMenu;
+import android.view.ContextMenu.ContextMenuInfo;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ContextMenu.ContextMenuInfo;
 import android.widget.AbsListView;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.AdapterView.OnItemClickListener;
+import android.widget.ArrayAdapter;
+import android.widget.ListView;
 
 public class MusicGenreListController extends ListController implements IController {
 	
@@ -72,22 +74,28 @@ public class MusicGenreListController extends ListController implements IControl
 					mActivity.startActivity(nextActivity);
 				}
 			});
+			
 			mFallbackBitmap = BitmapFactory.decodeResource(activity.getResources(), R.drawable.icon_genre);
-			setTitle("Genres...");
-			showOnLoading();
-			mMusicManager.getGenres(new DataResponse<ArrayList<Genre>>() {
+			
+			final String title = "Genres";
+			DataResponse<ArrayList<Genre>> response = new DataResponse<ArrayList<Genre>>() {
+				@SuppressLint("")
 				public void run() {
 					if (value.size() > 0) {
-						setTitle("Genres (" + value.size() + ")");
-						mList.setAdapter(new GenreAdapter(mActivity, value));
+						setTitle(title + " (" + value.size() + ")");
+						((ListView)mList).setAdapter(new GenreAdapter(mActivity, value));
 					} else {
-						setTitle("Genres");
+						setTitle(title);
 						setNoDataMessage("No genres found.", R.drawable.icon_genre_dark);
 					}
 				}
-			}, mActivity.getApplicationContext());
+			};
 			
 			mList.setOnKeyListener(new ListControllerOnKeyListener<Genre>());
+
+			setTitle("...");
+			showOnLoading();
+			mMusicManager.getGenres(response, mActivity.getApplicationContext());			
 		}
 	}
 	
@@ -152,8 +160,6 @@ public class MusicGenreListController extends ListController implements IControl
 
 	public void onActivityResume(Activity activity) {
 		super.onActivityResume(activity);
-		if (mMusicManager != null) {
-			mMusicManager.setController(this);
-		}
+		mMusicManager = ManagerFactory.getMusicManager(this);
 	}
 }

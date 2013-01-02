@@ -21,6 +21,7 @@
 
 package org.xbmc.android.remote.presentation.controller;
 
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 
 import org.xbmc.android.remote.R;
@@ -30,6 +31,7 @@ import org.xbmc.android.remote.presentation.activity.MovieDetailsActivity;
 import org.xbmc.android.remote.presentation.activity.NowPlayingActivity;
 import org.xbmc.android.remote.presentation.widget.FiveLabelsItemView;
 import org.xbmc.android.util.ImportUtilities;
+import org.xbmc.android.util.StringUtil;
 import org.xbmc.api.business.DataResponse;
 import org.xbmc.api.business.IControlManager;
 import org.xbmc.api.business.ISortableManager;
@@ -38,34 +40,42 @@ import org.xbmc.api.object.Actor;
 import org.xbmc.api.object.Genre;
 import org.xbmc.api.object.Movie;
 import org.xbmc.api.type.SortType;
+import org.xbmc.api.type.ThumbSize;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.os.Handler;
+import android.preference.PreferenceManager;
 import android.view.ContextMenu;
+import android.view.ContextMenu.ContextMenuInfo;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ContextMenu.ContextMenuInfo;
 import android.widget.AbsListView;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.Toast;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.AdapterView.OnItemClickListener;
+import android.widget.ArrayAdapter;
+import android.widget.ListView;
+import android.widget.Toast;
 
 public class MovieListController extends ListController implements IController {
-	
+
+	private static final int mThumbSize = ThumbSize.SMALL;
 	public static final int ITEM_CONTEXT_PLAY = 1;
 	public static final int ITEM_CONTEXT_INFO = 2;
+	public static final int ITEM_CONTEXT_IMDB = 3;
 	
 	public static final int MENU_PLAY_ALL = 1;
 	public static final int MENU_SORT = 2;
@@ -95,6 +105,7 @@ public class MovieListController extends ListController implements IController {
 		mControlManager = ManagerFactory.getControlManager(this);
 		
 		((ISortableManager)mVideoManager).setSortKey(AbstractManager.PREF_SORT_KEY_MOVIE);
+		((ISortableManager)mVideoManager).setIgnoreArticle(PreferenceManager.getDefaultSharedPreferences(activity.getApplicationContext()).getBoolean(ISortableManager.SETTING_IGNORE_ARTICLE, true));
 		((ISortableManager)mVideoManager).setPreferences(activity.getPreferences(Context.MODE_PRIVATE));
 		
 		final String sdError = ImportUtilities.assertSdCard();
@@ -131,49 +142,28 @@ public class MovieListController extends ListController implements IController {
 	}
 	
 	private void fetch() {
-		final Actor actor = mActor;
-		final Genre genre = mGenre;
+		final String title = mActor != null ? mActor.name + " - " : mGenre != null ? mGenre.name + " - " : "" + "Movies";
+		DataResponse<ArrayList<Movie>> response = new DataResponse<ArrayList<Movie>>() {
+			@SuppressLint("")
+			public void run() {
+				if (value.size() > 0) {
+					setTitle(title + " (" + value.size() + ")");
+					((ListView)mList).setAdapter(new MovieAdapter(mActivity, value));
+				} else {
+					setTitle(title);
+					setNoDataMessage("No movies found.", R.drawable.icon_movie_dark);
+				}
+			}
+		};
+		
 		showOnLoading();
-		if (actor != null) {						// movies with a certain actor
-			setTitle(actor.name + " - Movies...");
-			mVideoManager.getMovies(new DataResponse<ArrayList<Movie>>() {
-				public void run() {
-					if (value.size() > 0) {
-						setTitle(actor.name + " - Movies (" + value.size() + ")");
-						mList.setAdapter(new MovieAdapter(mActivity, value));
-					} else {
-						setTitle(actor.name + " - Movies");
-						setNoDataMessage("No movies found.", R.drawable.icon_movie_dark);
-					}
-				}
-			}, actor, mActivity.getApplicationContext());
-			
-		} else if (genre != null) {					// movies of a genre
-			setTitle(genre.name + " - Movies...");
-			mVideoManager.getMovies(new DataResponse<ArrayList<Movie>>() {
-				public void run() {
-					if (value.size() > 0) {
-						setTitle(genre.name + " - Movies (" + value.size() + ")");
-						mList.setAdapter(new MovieAdapter(mActivity, value));
-					} else {
-						setTitle(genre.name + " - Movies");
-						setNoDataMessage("No movies found.", R.drawable.icon_movie_dark);
-					}
-				}
-			}, genre, mActivity.getApplicationContext());
-		} else {
-			setTitle("Movies...");				// all movies
-			mVideoManager.getMovies(new DataResponse<ArrayList<Movie>>() {
-				public void run() {
-					if (value.size() > 0) {
-						setTitle("Movies (" + value.size() + ")");
-						mList.setAdapter(new MovieAdapter(mActivity, value));
-					} else {
-						setTitle("Movies");
-						setNoDataMessage("No movies found.", R.drawable.icon_movie_dark);
-					}
-				}
-			}, mActivity.getApplicationContext());
+		setTitle(title + "...");
+		if (mActor != null) {						// movies with a certain actor
+			mVideoManager.getMovies(response, mActor, mActivity.getApplicationContext());
+		} else if (mGenre != null) {					// movies of a genre
+			mVideoManager.getMovies(response, mGenre, mActivity.getApplicationContext());
+		} else {									// all movies
+			mVideoManager.getMovies(response, mActivity.getApplicationContext());
 		}
 	}
 	
@@ -215,6 +205,7 @@ public class MovieListController extends ListController implements IController {
 		menu.setHeaderTitle(view.title);
 		menu.add(0, ITEM_CONTEXT_PLAY, 1, "Play Movie");
 		menu.add(0, ITEM_CONTEXT_INFO, 2, "View Details");
+		menu.add(0, ITEM_CONTEXT_IMDB, 3, "Open IMDb");
 	}
 	
 	public void onContextItemSelected(MenuItem item) {
@@ -233,6 +224,29 @@ public class MovieListController extends ListController implements IController {
 				Intent nextActivity = new Intent(mActivity, MovieDetailsActivity.class);
 				nextActivity.putExtra(ListController.EXTRA_MOVIE, movie);
 				mActivity.startActivity(nextActivity);
+				break;
+			case ITEM_CONTEXT_IMDB:
+				Intent intentIMDb = null;
+				if (movie.getIMDbId().equals(""))
+				{
+					intentIMDb = new Intent(Intent.ACTION_VIEW, Uri.parse("imdb:///find?s=tt&q=" + movie.getName()));
+				}
+				else
+				{
+					intentIMDb = new Intent(Intent.ACTION_VIEW, Uri.parse("imdb:///title/" + movie.getIMDbId()));
+				}
+				if (mActivity.getPackageManager().resolveActivity(intentIMDb, PackageManager.MATCH_DEFAULT_ONLY) == null)
+				{
+					if (movie.getIMDbId().equals(""))
+					{
+						intentIMDb = new Intent(Intent.ACTION_VIEW, Uri.parse("http://www.imdb.com/search/title?title=" + movie.getShortName() + "&title_type=feature,tv_movie&release_date=" + movie.year));
+					}
+					else
+					{
+						intentIMDb = new Intent(Intent.ACTION_VIEW, Uri.parse("http://www.imdb.com/title/" + movie.getIMDbId()));
+					}
+				}
+				mActivity.startActivity(intentIMDb);
 				break;
 			default:
 				return;
@@ -348,13 +362,19 @@ public class MovieListController extends ListController implements IController {
 			view.position = position;
 			view.posterOverlay = movie.numWatched > 0 ? mWatchedBitmap : null;
 			view.title = movie.title;
-			view.subtitle = movie.genres;
+			view.subtitle = StringUtil.join(" / ", movie.genres);
 			view.subtitleRight = movie.year > 0 ? String.valueOf(movie.year) : "";
 			view.bottomtitle = movie.runtime;
-			view.bottomright = String.valueOf(movie.rating);
+			final DecimalFormat df = new DecimalFormat("#.0");
+			view.bottomright = String.valueOf(df.format(movie.rating));
 			
 			if (mLoadCovers) {
-				view.getResponse().load(movie, !mPostScrollLoader.isListIdle());
+				if(mVideoManager.coverLoaded(movie, mThumbSize)){
+					view.setCover(mVideoManager.getCoverSync(movie, mThumbSize));
+				}else{
+					view.setCover(null);
+					view.getResponse().load(movie, !mPostScrollLoader.isListIdle());
+				}
 			}
 			return view;
 		}
@@ -375,12 +395,8 @@ public class MovieListController extends ListController implements IController {
 
 	public void onActivityResume(Activity activity) {
 		super.onActivityResume(activity);
-		if (mVideoManager != null) {
-			mVideoManager.setController(this);
-		}
-		if (mControlManager != null) {
-			mControlManager.setController(this);
-		}
+		mVideoManager = ManagerFactory.getVideoManager(this);
+		mControlManager = ManagerFactory.getControlManager(this);
 	}
 
 }

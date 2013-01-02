@@ -21,8 +21,6 @@
 
 package org.xbmc.android.remote.presentation.activity;
 
-import java.io.IOException;
-
 import org.xbmc.android.remote.R;
 import org.xbmc.android.remote.business.ManagerFactory;
 import org.xbmc.android.remote.presentation.controller.AbstractController;
@@ -31,6 +29,7 @@ import org.xbmc.android.remote.presentation.controller.ListController;
 import org.xbmc.android.util.KeyTracker;
 import org.xbmc.android.util.KeyTracker.Stage;
 import org.xbmc.android.util.OnLongPressBackKeyTracker;
+import org.xbmc.android.util.StringUtil;
 import org.xbmc.api.business.DataResponse;
 import org.xbmc.api.business.IControlManager;
 import org.xbmc.api.business.IEventClientManager;
@@ -48,6 +47,7 @@ import android.os.Build.VERSION;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
+import android.view.Display;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -94,6 +94,10 @@ public class EpisodeDetailsActivity extends Activity {
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.tvepisodedetails);
+
+		// set display size
+		final Display display = getWindowManager().getDefaultDisplay(); 
+		ThumbSize.setScreenSize(display.getWidth(), display.getHeight());
 		
 		// remove nasty top fading edge
 		FrameLayout topFrame = (FrameLayout)findViewById(android.R.id.content);
@@ -110,8 +114,8 @@ public class EpisodeDetailsActivity extends Activity {
 		}
 		((TextView)findViewById(R.id.tvepisodedetails_show)).setText(episode.showTitle);
 		((TextView)findViewById(R.id.tvepisodedetails_first_aired)).setText(episode.firstAired);
-		((TextView)findViewById(R.id.tvepisodedetails_director)).setText(episode.director);
-		((TextView)findViewById(R.id.tvepisodedetails_writer)).setText(episode.writer);
+		((TextView)findViewById(R.id.tvepisodedetails_director)).setText(StringUtil.join(", ", episode.director));
+		((TextView)findViewById(R.id.tvepisodedetails_writer)).setText(StringUtil.join(", ", episode.writer));
 		((TextView)findViewById(R.id.tvepisodedetails_rating)).setText(String.valueOf(episode.rating));
 		
 		mEpisodeDetailsController.setupPlayButton((Button)findViewById(R.id.tvepisodedetails_playbutton));
@@ -176,7 +180,7 @@ public class EpisodeDetailsActivity extends Activity {
 					
 					if (episode.actors != null) {
 						final LayoutInflater inflater = mActivity.getLayoutInflater();
-						int n = 0;
+						//int n = 0;
 						for (Actor actor : episode.actors) {
 							final View view = inflater.inflate(R.layout.actor_item, null);
 							
@@ -209,7 +213,7 @@ public class EpisodeDetailsActivity extends Activity {
 //								}
 //							});
 							dataLayout.addView(view);
-							n++;
+							//n++;
 						}
 					}
 				}
@@ -218,13 +222,12 @@ public class EpisodeDetailsActivity extends Activity {
 
 		public void onActivityPause() {
 			mShowManager.setController(null);
-//			mShowManager.postActivity();
 			mControlManager.setController(null);
 		}
 
 		public void onActivityResume(Activity activity) {
-			mShowManager.setController(this);
-			mControlManager.setController(this);
+			mShowManager = ManagerFactory.getTvManager(this);
+			mControlManager = ManagerFactory.getControlManager(this);
 		}
 	}
 
@@ -251,18 +254,13 @@ public class EpisodeDetailsActivity extends Activity {
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
 		IEventClientManager client = ManagerFactory.getEventClientManager(mEpisodeDetailsController);
-		try {
-			switch (keyCode) {
-				case KeyEvent.KEYCODE_VOLUME_UP:
-					client.sendButton("R1", ButtonCodes.REMOTE_VOLUME_PLUS, false, true, true, (short)0, (byte)0);
-					return true;
-				case KeyEvent.KEYCODE_VOLUME_DOWN:
-					client.sendButton("R1", ButtonCodes.REMOTE_VOLUME_MINUS, false, true, true, (short)0, (byte)0);
-					return true;
-			}
-		} catch (IOException e) {
-			client.setController(null);
-			return false;
+		switch (keyCode) {
+			case KeyEvent.KEYCODE_VOLUME_UP:
+				client.sendButton("R1", ButtonCodes.REMOTE_VOLUME_PLUS, false, true, true, (short)0, (byte)0);
+				return true;
+			case KeyEvent.KEYCODE_VOLUME_DOWN:
+				client.sendButton("R1", ButtonCodes.REMOTE_VOLUME_MINUS, false, true, true, (short)0, (byte)0);
+				return true;
 		}
 		client.setController(null);
 		boolean handled =  (mKeyTracker != null)?mKeyTracker.doKeyDown(keyCode, event):false;

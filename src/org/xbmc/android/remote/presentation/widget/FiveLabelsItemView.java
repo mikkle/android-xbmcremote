@@ -7,14 +7,15 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Rect;
 import android.graphics.Paint.Align;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 
 public class FiveLabelsItemView extends AbstractItemView {
 	
-	private final int posterWidth, posterHeight;
-	private final Rect posterRect;
+	protected int posterWidth;
+	protected int posterHeight;
+	protected Rect posterRect;
 	
 	public Bitmap posterOverlay;
 	public String subtitle;

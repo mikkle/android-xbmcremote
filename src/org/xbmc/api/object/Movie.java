@@ -23,7 +23,9 @@ package org.xbmc.api.object;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.List;
 
+import org.xbmc.android.jsonrpc.api.model.VideoModel.MovieDetail;
 import org.xbmc.android.util.Crc32;
 import org.xbmc.api.type.MediaType;
 
@@ -45,17 +47,34 @@ public class Movie implements ICoverArt, Serializable, INamedResource {
 	 * @param name		Album name
 	 * @param artist	Artist
 	 */
-	public Movie(int id, String title, int year, String path, String filename, String director, String runtime, String genres, double rating, int numWatched) {
+	public Movie(int id, String title, int year, String path, String filename, String director, String runtime, String genres, double rating, int numWatched, String imdbId) {
 		this.id = id;
 		this.title = title;
 		this.year = year;
-		this.director = director;
+		this.director.add(director);
 		this.runtime = runtime;
-		this.genres = genres;
+		this.genres.add(genres);
 		this.rating = rating;
 		this.localPath = path;
 		this.filename = filename;
 		this.numWatched = numWatched;
+		this.imdbId=imdbId;
+	}
+	
+	public Movie(MovieDetail detail) {
+		this.id = detail.movieid;
+		this.title = detail.title;
+		this.year = detail.year;
+		this.director = detail.director;
+		// runtime is in minutes
+		this.runtime = Integer.toString(detail.runtime / 60);
+		this.genres = detail.genre;
+		this.rating = detail.rating;
+		this.localPath = "";
+		this.filename = detail.file;
+		this.numWatched = detail.playcount;
+		this.imdbId = detail.imdbnumber;
+		this.thumbnail = detail.thumbnail;
 	}
 	
 	public int getMediaType() {
@@ -79,15 +98,10 @@ public class Movie implements ICoverArt, Serializable, INamedResource {
 		return this.title;
 	}
 	
-	/**
-	 * Composes the complete path to the movie's thumbnail
-	 * @return Path to thumbnail
-	 */
-	public String getThumbUri() {
-		return getThumbUri(this);
-	}
-	
 	public static String getThumbUri(ICoverArt cover) {
+		if(cover.getThumbnail() != null) {
+			return cover.getThumbnail();
+		}
 		final String hex = Crc32.formatAsHexLowerCase(cover.getCrc());
 		return THUMB_PREFIX + hex.charAt(0) + "/" + hex + ".tbn";
 	}
@@ -138,11 +152,22 @@ public class Movie implements ICoverArt, Serializable, INamedResource {
 	}
 	
 	/**
+	 * @return The Movie's IMDbId
+	 */
+	public String getIMDbId(){
+		return this.imdbId;
+	}
+	
+	/**
 	 * Returns database ID.
 	 * @return
 	 */
 	public String getName() {
 		return title + " (" + year + ")";
+	}
+	
+	public String getThumbnail() {
+		return thumbnail;
 	}
 	
 	/**
@@ -155,37 +180,37 @@ public class Movie implements ICoverArt, Serializable, INamedResource {
 	/**
 	 * Database ID
 	 */
-	public int id;
+	private final int id;
 	/**
 	 * Movie title
 	 */
-	public String title;
+	public final String title;
 	/**
 	 * Director(s), can be several separated by " / "
 	 */
-	public String director;
+	public List<String> director = new ArrayList<String>();
 	/**
 	 * Runtime, can be several also, separated by " | "
 	 */
-	public String runtime;
+	public final String runtime;
 	/**
 	 * Genre(s), can be several, normally separated by " / "
 	 */
-	public String genres;
+	public List<String> genres = new ArrayList<String>();
 	/**
-	 * Year released
+	 * Year released, -1 if unknown
 	 */
-	public int year = -1;
+	public final int year;
 	
 	/**
 	 * Local path of the movie (without file name)
 	 */
-	public String localPath;
+	public final String localPath;
 	
 	/**
 	 * File name of the movie
 	 */
-	public String filename;
+	public final String filename;
 	
 	/**
 	 * Rating
@@ -215,25 +240,29 @@ public class Movie implements ICoverArt, Serializable, INamedResource {
 	/**
 	 * Studio
 	 */
-	public String studio = null;
+	public List<String> studio = new ArrayList<String>();
 	
 	/**
 	 * Number of watched, -1 if not set.
 	 */
-	public int numWatched = -1;
+	public final int numWatched;
 	
 	/**
 	 * List of actors; 
 	 */
-	public ArrayList<Actor> actors = null;
+	public ArrayList<Actor> actors = new ArrayList<Actor>();
 	
-	
+	/**
+	 * The movie's imdbId
+	 */
+	private final String imdbId;
 	
 	/**
 	 * Save this once it's calculated
 	 */
 	public long thumbID = 0L;
 	
-	private static final long serialVersionUID = 4779827915067184250L;
-
+	public String thumbnail;
+	
+	private static final long serialVersionUID = 4779827915067184250L;	
 }

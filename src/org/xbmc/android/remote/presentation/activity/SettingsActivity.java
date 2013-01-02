@@ -21,18 +21,18 @@
 
 package org.xbmc.android.remote.presentation.activity;
 
-import java.io.IOException;
-
 import org.xbmc.android.remote.R;
 import org.xbmc.android.remote.business.ManagerFactory;
 import org.xbmc.android.remote.presentation.controller.SettingsController;
 import org.xbmc.api.business.IEventClientManager;
+import org.xbmc.api.type.ThumbSize;
 import org.xbmc.eventclient.ButtonCodes;
 
 import android.os.Bundle;
 import android.os.Handler;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceScreen;
+import android.view.Display;
 import android.view.KeyEvent;
 
 /**
@@ -58,6 +58,10 @@ public class SettingsActivity extends PreferenceActivity {
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		addPreferencesFromResource(R.xml.preferences);
+
+		// set display size
+		final Display display = getWindowManager().getDefaultDisplay(); 
+		ThumbSize.setScreenSize(display.getWidth(), display.getHeight());	
 		
 		mSettingsController = new SettingsController(this, new Handler());
 		mSettingsController.registerOnSharedPreferenceChangeListener(this);
@@ -92,18 +96,13 @@ public class SettingsActivity extends PreferenceActivity {
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
 		IEventClientManager client = ManagerFactory.getEventClientManager(mSettingsController);	
-		try {
-			switch (keyCode) {
-				case KeyEvent.KEYCODE_VOLUME_UP:
-					client.sendButton("R1", ButtonCodes.REMOTE_VOLUME_PLUS, false, true, true, (short)0, (byte)0);
-					return true;
-				case KeyEvent.KEYCODE_VOLUME_DOWN:
-					client.sendButton("R1", ButtonCodes.REMOTE_VOLUME_MINUS, false, true, true, (short)0, (byte)0);
-					return true;
-			}
-		} catch (IOException e) {
-			client.setController(null);
-			return false;
+		switch (keyCode) {
+			case KeyEvent.KEYCODE_VOLUME_UP:
+				client.sendButton("R1", ButtonCodes.REMOTE_VOLUME_PLUS, false, true, true, (short)0, (byte)0);
+				return true;
+			case KeyEvent.KEYCODE_VOLUME_DOWN:
+				client.sendButton("R1", ButtonCodes.REMOTE_VOLUME_MINUS, false, true, true, (short)0, (byte)0);
+				return true;
 		}
 		client.setController(null);
 		return super.onKeyDown(keyCode, event);

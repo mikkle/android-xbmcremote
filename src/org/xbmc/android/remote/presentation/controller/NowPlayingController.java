@@ -21,8 +21,6 @@
 
 package org.xbmc.android.remote.presentation.controller;
 
-import java.io.IOException;
-
 import org.xbmc.android.remote.business.ManagerFactory;
 import org.xbmc.android.remote.business.NowPlayingPollerThread;
 import org.xbmc.android.remote.presentation.activity.NowPlayingActivity;
@@ -42,8 +40,8 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Message;
 import android.os.Handler.Callback;
+import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -105,6 +103,12 @@ public class NowPlayingController extends AbstractController implements INotifia
 				mNowPlayingActivity.updateCover(ConnectionFactory.getNowPlayingPoller(mActivity).getNowPlayingCover(), (currentlyPlaying != null) ? currentlyPlaying.getMediaType() : MediaType.UNKNOWN);
 				return true;
 				
+			case NowPlayingPollerThread.MESSAGE_FANART_CHANGED:
+				// TODO: FIX!!
+				mNowPlayingActivity.updateFanart(ConnectionFactory.getNowPlayingPoller(mActivity).getNowPlayingFanart(), (currentlyPlaying != null) ? currentlyPlaying.getMediaType() : MediaType.UNKNOWN);
+				return true;
+				
+				
 			case NowPlayingPollerThread.MESSAGE_CONNECTION_ERROR:
 				mPlayStatus = PlayStatus.UNKNOWN;
 				Log.w(TAG,"Received connection error from poller!");
@@ -159,21 +163,19 @@ public class NowPlayingController extends AbstractController implements INotifia
 		next.setOnClickListener(new OnRemoteAction(ButtonCodes.REMOTE_SKIP_PLUS));
 		playpause.setOnClickListener(new OnClickListener() {
 			public void onClick(View v) {
-				try {
-					switch (mPlayStatus) {
-						case PlayStatus.PLAYING:
-							mEventClientManager.sendButton("R1", ButtonCodes.REMOTE_PAUSE, false, true, true, (short)0, (byte)0);
-							break;
-						case PlayStatus.PAUSED:
-							mEventClientManager.sendButton("R1", ButtonCodes.REMOTE_PLAY, false, true, true, (short)0, (byte)0);
-							break;
-						case PlayStatus.STOPPED:
-							final DataResponse<Boolean> doNothing = new DataResponse<Boolean>();
-							mControlManager.setPlaylistId(doNothing, mPlayListId < 0 ? 0 : mPlayListId, mActivity.getApplicationContext());
-							mControlManager.setPlaylistPos(doNothing, mLastPosition < 0 ? 0 : mLastPosition, mActivity.getApplicationContext());
-							break;
-					}
-				} catch (IOException e) { }
+				switch (mPlayStatus) {
+					case PlayStatus.PLAYING:
+						mEventClientManager.sendButton("R1", ButtonCodes.REMOTE_PAUSE, false, true, true, (short)0, (byte)0);
+						break;
+					case PlayStatus.PAUSED:
+						mEventClientManager.sendButton("R1", ButtonCodes.REMOTE_PLAY, false, true, true, (short)0, (byte)0);
+						break;
+					case PlayStatus.STOPPED:
+						final DataResponse<Boolean> doNothing = new DataResponse<Boolean>();
+						mControlManager.setPlaylistId(doNothing, mPlayListId < 0 ? 0 : mPlayListId, mActivity.getApplicationContext());
+						mControlManager.setPlaylistPos(doNothing, mLastPosition < 0 ? 0 : mLastPosition, mActivity.getApplicationContext());
+						break;
+				}
 			}
 		});
 		
@@ -199,9 +201,7 @@ public class NowPlayingController extends AbstractController implements INotifia
 			mAction = action;
 		}
 		public void onClick(View v) {
-			try {
-				mEventClientManager.sendButton("R1", mAction, false, true, true, (short)0, (byte)0);
-			} catch (IOException e) { }
+			mEventClientManager.sendButton("R1", mAction, false, true, true, (short)0, (byte)0);
 		}
 	}
 	
@@ -213,11 +213,9 @@ public class NowPlayingController extends AbstractController implements INotifia
 		super.onActivityPause();
 	}
 
-	public void onActivityResume(Activity activity) {
+	public void onActivityResume(final Activity activity) {
 		super.onActivityResume(activity);
 		ConnectionFactory.getNowPlayingPoller(activity.getApplicationContext()).subscribe(mNowPlayingHandler);
-		if (mControlManager != null) {
-			mControlManager.setController(this);
-		}
+		mControlManager = ManagerFactory.getControlManager(this);
 	}
 }

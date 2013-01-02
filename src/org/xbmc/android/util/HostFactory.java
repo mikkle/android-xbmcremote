@@ -23,6 +23,9 @@ package org.xbmc.android.util;
 
 import java.util.ArrayList;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.json.JSONTokener;
 import org.xbmc.android.remote.business.provider.HostProvider;
 import org.xbmc.android.remote.business.provider.HostProvider.Hosts;
 import org.xbmc.api.object.Host;
@@ -77,6 +80,8 @@ public abstract class HostFactory {
 				final int userCol = cur.getColumnIndex(HostProvider.Hosts.USER);
 				final int passCol = cur.getColumnIndex(HostProvider.Hosts.PASS);
 				final int esPortCol = cur.getColumnIndex(HostProvider.Hosts.ESPORT);
+				final int jsonPortCol = cur.getColumnIndex(HostProvider.Hosts.JSONPORT);
+				final int jsonApiCol = cur.getColumnIndex(HostProvider.Hosts.JSONAPI);
 				final int timeoutCol = cur.getColumnIndex(HostProvider.Hosts.TIMEOUT);
 				final int wifiOnlyCol = cur.getColumnIndex(HostProvider.Hosts.WIFI_ONLY);
 				final int accessPointCol = cur.getColumnIndex(HostProvider.Hosts.ACCESS_POINT);
@@ -92,6 +97,8 @@ public abstract class HostFactory {
 					host.user = cur.getString(userCol);
 					host.pass = cur.getString(passCol);
 					host.esPort = cur.getInt(esPortCol);
+					host.jsonPort = cur.getInt(jsonPortCol);
+					host.jsonApi = cur.getInt(jsonApiCol) == 1;
 					host.timeout = cur.getInt(timeoutCol);
 					host.access_point = cur.getString(accessPointCol);
 					host.mac_addr = cur.getString(macAddrCol);
@@ -108,6 +115,38 @@ public abstract class HostFactory {
 	}
 	
 	/**
+	 * Parses a JSON-formatted string into a Host object.
+	 * 
+	 * @param str a JSON string
+	 * @return a Host object that represents str, or null if an error occurred
+	 */
+	public static Host getHostFromJson(String str) {
+		try {
+			JSONObject json = (JSONObject) new JSONTokener(str).nextValue();
+			Host host = new Host();
+			host.name = json.getString("name");
+			host.addr = json.getString("addr");
+			host.port = json.getInt("port");
+			host.user = json.getString("user");
+			host.pass = json.getString("pass");
+			host.esPort = json.getInt("esPort");
+			host.jsonPort = json.getInt("jsonPort");
+			host.jsonApi = json.getBoolean("jsonApi");
+			host.timeout = json.getInt("timeout");
+			host.wifi_only = json.getBoolean("wifi_only");
+			host.access_point = json.getString("access_point");
+			host.mac_addr = json.getString("mac_addr");
+			host.wol_wait = json.getInt("wol_wait");
+			host.wol_port = json.getInt("wol_port");
+			return host;
+		}
+		catch (JSONException e) {
+			Log.e(TAG, "Error in parseJson", e);
+			return null;
+		}
+	}
+	
+	/**
 	 * Adds a host to the database.
 	 * @param context Reference to context
 	 * @param host Host to add
@@ -120,6 +159,8 @@ public abstract class HostFactory {
 		values.put(HostProvider.Hosts.USER, host.user);
 		values.put(HostProvider.Hosts.PASS, host.pass);
 		values.put(HostProvider.Hosts.ESPORT, host.esPort);
+		values.put(HostProvider.Hosts.JSONPORT, host.jsonPort);
+		values.put(HostProvider.Hosts.JSONAPI, host.jsonApi ? 1 : 0);
 		values.put(HostProvider.Hosts.TIMEOUT, host.timeout);
 		values.put(HostProvider.Hosts.WIFI_ONLY, host.wifi_only?1:0);
 		values.put(HostProvider.Hosts.MAC_ADDR, host.mac_addr);
@@ -142,6 +183,8 @@ public abstract class HostFactory {
 		values.put(HostProvider.Hosts.USER, host.user);
 		values.put(HostProvider.Hosts.PASS, host.pass);
 		values.put(HostProvider.Hosts.ESPORT, host.esPort);
+		values.put(HostProvider.Hosts.JSONPORT, host.jsonPort);
+		values.put(HostProvider.Hosts.JSONAPI, host.jsonApi?1:0);
 		values.put(HostProvider.Hosts.TIMEOUT, host.timeout);
 		values.put(HostProvider.Hosts.WIFI_ONLY, host.wifi_only?1:0);
 		values.put(HostProvider.Hosts.MAC_ADDR, host.mac_addr);
@@ -193,7 +236,11 @@ public abstract class HostFactory {
 		} else {
 			host = getHost(context, hostId);
 		}
-		Log.i(TAG, "XBMC Host = " + (host == null ? "[host=null]" : host.addr));
+		if(host != null && host.jsonApi) {
+			Log.i(TAG, "XBMC JSON Host = " + (host == null ? "[host=null]" : host.addr + ":" + host.jsonPort));
+			return;
+		}
+		Log.i(TAG, "XBMC HTTP Host = " + (host == null ? "[host=null]" : host.addr + host.port));
 	}
 	
 	/**
@@ -215,6 +262,8 @@ public abstract class HostFactory {
 				host.user = cur.getString(cur.getColumnIndex(HostProvider.Hosts.USER));
 				host.pass = cur.getString(cur.getColumnIndex(HostProvider.Hosts.PASS));
 				host.esPort = cur.getInt(cur.getColumnIndex(HostProvider.Hosts.ESPORT));
+				host.jsonPort = cur.getInt(cur.getColumnIndex(HostProvider.Hosts.JSONPORT));
+				host.jsonApi = cur.getInt(cur.getColumnIndex(HostProvider.Hosts.JSONAPI)) == 1;
 				host.timeout = cur.getInt(cur.getColumnIndex(HostProvider.Hosts.TIMEOUT));
 				host.wifi_only = cur.getInt(cur.getColumnIndex(HostProvider.Hosts.WIFI_ONLY))==1;
 				host.access_point = cur.getString(cur.getColumnIndex(HostProvider.Hosts.ACCESS_POINT));
